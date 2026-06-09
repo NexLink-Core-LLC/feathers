@@ -1,0 +1,57 @@
+{
+  "_comment": "The Isle: Legacy (Windows-native / winproc). SteamCMD app 412680 -beta public, installed to the server ROOT (SteamCMD in daemon TEMP so force_install_dir is honored; run twice to clear the self-update). Launches the REAL UE4 server binary directly (TheIsle/Binaries/Win64/TheIsleServer-Win64-Shipping.exe) — NOT the 0.3MB root launcher, which spawns a detached child we can't track. -stdout makes UE write its log to stdout so the console + 'done' matcher work. The install also runs UE4PrereqSetup (VC++ redist) which the server needs on a fresh host. Game config: TheIsle\\Saved\\Config\\WindowsServer\\Game.ini (Files tab). 'done' matcher is a best guess. Ports 7777-7779 UDP.",
+  "meta": { "version": "PTDL_v2", "update_url": null },
+  "exported_at": "2026-06-03T00:00:00+00:00",
+  "name": "The Isle: Legacy (Windows)",
+  "author": "test@feathers.local",
+  "description": "The Isle (Legacy/public branch) dedicated server for Windows-native winproc nodes. Installs via SteamCMD app 412680 (public branch) into the server root, installs UE4 prerequisites, and launches the Shipping server binary directly.",
+  "features": null,
+  "docker_images": { "Windows SteamCMD": "windows/steamcmd" },
+  "file_denylist": [],
+  "startup": "TheIsle/Binaries/Win64/TheIsleServer-Win64-Shipping.exe /Game/TheIsle/Maps/{{MAP}}?Port={{SERVER_PORT}}?MaxPlayers={{MAX_PLAYERS}}?game={{GAME_MODE}} -log -stdout -FullStdOutLogOutput",
+  "config": {
+    "files": "{}",
+    "startup": "{\"done\":[\"Match State Changed from WaitingToStart to InProgress\"]}",
+    "logs": "{}",
+    "stop": "^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": "$ErrorActionPreference = 'Stop'\r\n$dir = (Get-Location).Path\r\n$sc = Join-Path $env:TEMP ('feathers-steamcmd-' + $env:P_SERVER_UUID)\r\nNew-Item -ItemType Directory -Force -Path $sc | Out-Null\r\n$zip = Join-Path $sc 'steamcmd.zip'\r\nWrite-Output 'Downloading SteamCMD...'\r\nInvoke-WebRequest -Uri 'https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip' -OutFile $zip\r\nExpand-Archive -Path $zip -DestinationPath $sc -Force\r\n$steam = Join-Path $sc 'steamcmd.exe'\r\nWrite-Output 'Bootstrapping SteamCMD (self-update)...'\r\n& $steam +quit\r\nWrite-Output 'Installing The Isle: Legacy (app 412680, branch public)...'\r\n& $steam +force_install_dir $dir +login anonymous +app_update 412680 -beta public validate +quit\r\n$prereq = Join-Path $dir 'Engine\\Extras\\Redist\\en-us\\UE4PrereqSetup_x64.exe'\r\nif (Test-Path $prereq) {\r\n  Write-Output 'Installing UE4 prerequisites (VC++ redistributables)...'\r\n  $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'\r\n  & $prereq /quiet /norestart\r\n  $ErrorActionPreference = $eap\r\n}\r\n$ship = Join-Path $dir 'TheIsle\\Binaries\\Win64\\TheIsleServer-Win64-Shipping.exe'\r\nif (Test-Path $ship) { Write-Output 'OK: Shipping server exe present.' } else { Write-Output 'WARNING: Shipping exe NOT found.' }\r\nWrite-Output 'Install complete.'\r\n",
+      "container": "windows/steamcmd",
+      "entrypoint": "powershell"
+    }
+  },
+  "variables": [
+    {
+      "name": "Map",
+      "description": "Map path under /Game/TheIsle/Maps/ (e.g. Landscape3/Isle_V3, Thenyaw_Island, DV_TestLevel).",
+      "env_variable": "MAP",
+      "default_value": "Landscape3/Isle_V3",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string",
+      "field_type": "text"
+    },
+    {
+      "name": "Max Players",
+      "description": "Maximum number of players.",
+      "env_variable": "MAX_PLAYERS",
+      "default_value": "100",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|integer|between:1,300",
+      "field_type": "text"
+    },
+    {
+      "name": "Game Mode",
+      "description": "Game mode (e.g. Survival, Sandbox).",
+      "env_variable": "GAME_MODE",
+      "default_value": "Survival",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string",
+      "field_type": "text"
+    }
+  ]
+}
