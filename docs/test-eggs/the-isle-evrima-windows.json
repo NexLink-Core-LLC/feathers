@@ -1,0 +1,37 @@
+{
+  "_comment": "The Isle: Evrima (Windows-native / winproc). SteamCMD app 412680 -beta evrima into the server ROOT (SteamCMD in daemon TEMP, run twice). Launches the REAL UE4 server binary directly (TheIsle/Binaries/Win64/TheIsleServer-Win64-Shipping.exe) with -stdout so logs reach the console; the 0.3MB root launcher is bypassed. Install also runs UE4PrereqSetup (VC++ redist) and writes the STATIC EOS credentials to TheIsle\\Saved\\Config\\WindowsServer\\Engine.ini. NOTE: the Shipping exe path is assumed identical to Legacy; if the install logs 'WARNING: Shipping exe NOT found', check the actual path and adjust the startup. Ports: game/query 7777 UDP.",
+  "meta": { "version": "PTDL_v2", "update_url": null },
+  "exported_at": "2026-06-03T00:00:00+00:00",
+  "name": "The Isle: Evrima (Windows)",
+  "author": "test@feathers.local",
+  "description": "The Isle (Evrima branch) dedicated server for Windows-native winproc nodes. Installs ~70GB via SteamCMD app 412680 (evrima branch) into the server root, installs UE4 prerequisites, writes EOS credentials to Engine.ini, and launches the Shipping server binary directly.",
+  "features": null,
+  "docker_images": { "Windows SteamCMD": "windows/steamcmd" },
+  "file_denylist": [],
+  "startup": "TheIsle/Binaries/Win64/TheIsleServer-Win64-Shipping.exe ?Port={{SERVER_PORT}} -log -stdout -FullStdOutLogOutput {{ADDITIONAL_ARGS}}",
+  "config": {
+    "files": "{}",
+    "startup": "{\"done\":[\"Match State Changed from WaitingToStart to InProgress\"]}",
+    "logs": "{}",
+    "stop": "^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": "$ErrorActionPreference = 'Stop'\r\n$dir = (Get-Location).Path\r\n$sc = Join-Path $env:TEMP ('feathers-steamcmd-' + $env:P_SERVER_UUID)\r\nNew-Item -ItemType Directory -Force -Path $sc | Out-Null\r\n$zip = Join-Path $sc 'steamcmd.zip'\r\nWrite-Output 'Downloading SteamCMD...'\r\nInvoke-WebRequest -Uri 'https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip' -OutFile $zip\r\nExpand-Archive -Path $zip -DestinationPath $sc -Force\r\n$steam = Join-Path $sc 'steamcmd.exe'\r\nWrite-Output 'Bootstrapping SteamCMD (self-update)...'\r\n& $steam +quit\r\nWrite-Output 'Installing The Isle: Evrima (app 412680, branch evrima). This downloads ~70GB and can take a while...'\r\n& $steam +force_install_dir $dir +login anonymous +app_update 412680 -beta evrima validate +quit\r\n$prereq = Join-Path $dir 'Engine\\Extras\\Redist\\en-us\\UE4PrereqSetup_x64.exe'\r\nif (Test-Path $prereq) {\r\n  Write-Output 'Installing UE4 prerequisites (VC++ redistributables)...'\r\n  $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'\r\n  & $prereq /quiet /norestart\r\n  $ErrorActionPreference = $eap\r\n}\r\n$cfgDir = Join-Path $dir 'TheIsle\\Saved\\Config\\WindowsServer'\r\nNew-Item -ItemType Directory -Force -Path $cfgDir | Out-Null\r\n$engineIni = Join-Path $cfgDir 'Engine.ini'\r\nif ((-not (Test-Path $engineIni)) -or (-not (Select-String -Path $engineIni -Pattern 'EpicOnlineServices' -Quiet))) {\r\n  Add-Content -Path $engineIni -Value \"[EpicOnlineServices]`r`nDedicatedServerClientId=xyza7891gk5PRo3J7G9puCJGFJjmEguW`r`nDedicatedServerClientSecret=pKWl6t5i9NJK8gTpVlAxzENZ65P8hYzodV8Dqe5Rlc8\" -Encoding ascii\r\n  Write-Output 'Wrote [EpicOnlineServices] block to Engine.ini'\r\n}\r\n$ship = Join-Path $dir 'TheIsle\\Binaries\\Win64\\TheIsleServer-Win64-Shipping.exe'\r\nif (Test-Path $ship) { Write-Output 'OK: Shipping server exe present.' } else { Write-Output 'WARNING: Shipping exe NOT found.' }\r\nWrite-Output 'Install complete.'\r\n",
+      "container": "windows/steamcmd",
+      "entrypoint": "powershell"
+    }
+  },
+  "variables": [
+    {
+      "name": "Additional Launch Arguments",
+      "description": "Optional extra arguments appended to the server (leave blank for defaults). EOS credentials are NOT set here — they live in Engine.ini.",
+      "env_variable": "ADDITIONAL_ARGS",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string",
+      "field_type": "text"
+    }
+  ]
+}

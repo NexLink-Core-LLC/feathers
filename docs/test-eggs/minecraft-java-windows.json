@@ -1,0 +1,53 @@
+{
+  "_comment": "Feathers Minecraft Java (Windows-native) egg. Docker image is the platform marker 'windows/...' — the winproc daemon rejects non-windows eggs, and Linux/Docker nodes reject this one. The install script is PowerShell (the daemon runs it natively, not in a container). REQUIRES a Java runtime (e.g. Temurin JRE 21) installed and on PATH on the Windows node.",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2026-06-03T00:00:00+00:00",
+  "name": "Minecraft Java (Windows)",
+  "author": "test@feathers.local",
+  "description": "Vanilla Minecraft Java server for Windows-native (winproc) nodes. Downloads the official server jar and accepts the EULA during install. Requires a Java runtime on the node's PATH.",
+  "_features_comment": "Features are intentionally null on Windows: the 'java_version'/'pid_limit'/'eula' features all remedy via Docker (e.g. switching container image), which is meaningless on a winproc node where the image is only a platform marker. Leaving them on hijacks the console with a useless 'Update Docker Image' modal.",
+  "features": null,
+  "docker_images": {
+    "Windows Java": "windows/java"
+  },
+  "file_denylist": [],
+  "startup": "java -Xms128M -Xmx{{SERVER_MEMORY}}M -Dterminal.jline=false -Dterminal.ansi=true -jar {{SERVER_JARFILE}} nogui",
+  "config": {
+    "files": "{\"server.properties\":{\"parser\":\"properties\",\"find\":{\"server-ip\":\"0.0.0.0\",\"server-port\":\"{{server.build.default.port}}\",\"query.port\":\"{{server.build.default.port}}\",\"enable-query\":\"true\"}}}",
+    "startup": "{\"done\":[\")! For help, type\"]}",
+    "logs": "{}",
+    "stop": "stop"
+  },
+  "scripts": {
+    "installation": {
+      "script": "$ErrorActionPreference = 'Stop'\r\nWrite-Output 'Resolving Minecraft server download...'\r\n$ver = $env:VANILLA_VERSION\r\n$manifest = Invoke-RestMethod -Uri 'https://launchermeta.mojang.com/mc/game/version_manifest.json'\r\nif ([string]::IsNullOrWhiteSpace($ver) -or $ver -eq 'latest') { $ver = $manifest.latest.release }\r\n$entry = $manifest.versions | Where-Object { $_.id -eq $ver } | Select-Object -First 1\r\nif (-not $entry) { Write-Output ('Version ' + $ver + ' not found'); exit 1 }\r\nWrite-Output ('Selected Minecraft version: ' + $ver)\r\n$meta = Invoke-RestMethod -Uri $entry.url\r\n$url = $meta.downloads.server.url\r\n$jar = $env:SERVER_JARFILE\r\nif ([string]::IsNullOrWhiteSpace($jar)) { $jar = 'server.jar' }\r\nWrite-Output ('Downloading server jar to ' + $jar)\r\nInvoke-WebRequest -Uri $url -OutFile $jar\r\nSet-Content -Path 'eula.txt' -Value 'eula=true' -Encoding ascii\r\nWrite-Output 'Install complete.'\r\n",
+      "container": "windows/java",
+      "entrypoint": "powershell"
+    }
+  },
+  "variables": [
+    {
+      "name": "Server Jar File",
+      "description": "The name of the server jarfile to run the server with.",
+      "env_variable": "SERVER_JARFILE",
+      "default_value": "server.jar",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|regex:/^([\\w\\d._-]+)(\\.jar)$/",
+      "field_type": "text"
+    },
+    {
+      "name": "Minecraft Version",
+      "description": "The version of Minecraft to download and run. Use 'latest' for the newest release, or pin a specific version like '1.21.4'.",
+      "env_variable": "VANILLA_VERSION",
+      "default_value": "latest",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|between:3,15",
+      "field_type": "text"
+    }
+  ]
+}

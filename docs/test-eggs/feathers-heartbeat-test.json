@@ -1,0 +1,31 @@
+{
+  "_comment": "Feathers Phase-2 smoke-test egg. Prints a heartbeat via PowerShell. No install step, no server files required. Docker image is ignored by the winproc backend.",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2026-06-03T00:00:00+00:00",
+  "name": "Feathers Heartbeat Test",
+  "author": "test@feathers.local",
+  "description": "Minimal Windows test egg for the winproc backend. Launches a PowerShell loop that prints a heartbeat line every 2 seconds. Used to verify power actions and console streaming end-to-end through the Panel without needing an install step or any server files.",
+  "features": null,
+  "docker_images": {
+    "Windows native": "windows/test"
+  },
+  "file_denylist": [],
+  "startup": "powershell -NoProfile -Command \"while($true){Write-Output ('heartbeat from feathers ' + (Get-Date -Format o)); Start-Sleep -Seconds 2}\"",
+  "config": {
+    "files": "{}",
+    "startup": "{\"done\": [\"heartbeat from feathers\"]}",
+    "logs": "{}",
+    "stop": "^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/ash\r\necho 'no-op install (skipped on Windows)'\r\n",
+      "container": "alpine:3.9",
+      "entrypoint": "ash"
+    }
+  },
+  "variables": []
+}

@@ -1,0 +1,12 @@
+.gitnexus
+
+# Local AI-assistant config (machine-specific paths, never publish)
+.claude/
+
+# Upstream reference clones (read-only, pinned: wings v1.12.3 / panel v1.12.4)
+vendor/
+
+# Build artifacts from the feathers fork (source is tracked; binaries/logs are not)
+feathers/*.exe
+feathers/_build_*.txt
+temp/
