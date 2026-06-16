@@ -10,3 +10,6 @@ vendor/
 feathers/*.exe
 feathers/_build_*.txt
 temp/
+
+# AI-assisted planning / spec docs (kept local, not published)
+docs/phase0-conformance-spec.md
