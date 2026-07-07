@@ -26,7 +26,7 @@ restricted accounts) in place of the Docker backend.
 | Server **install** (runs egg script natively, no Docker) | ✅ verified |
 | Server **power** (start / stop / restart / kill) | ✅ verified |
 | **Console** stream + send commands (websocket) | ✅ verified |
-| **Resource reporting** (CPU / memory graphs) | ✅ verified (network = 0) |
+| **Resource reporting** (CPU / memory / network graphs) | ✅ verified |
 | **Resource enforcement** (memory + CPU hard caps, live-updatable) | ✅ verified |
 | **Per-server isolation** (restricted account + NTFS ACLs + path jail) | ✅ verified (3 servers, no cross-access) |
 | **File manager / SFTP** (impersonated as the per-server account) | ✅ verified |
@@ -34,7 +34,7 @@ restricted accounts) in place of the Docker backend.
 | **Daemon-restart persistence** (auto-recovers running servers) | ✅ verified |
 | Egg platform tagging (block Win egg on Linux & vice-versa) | ✅ verified |
 | Schedules / cron · Win↔Win transfers · full OS-reboot recovery | ⚠️ built, not yet exercised |
-| Per-process network stats | ❌ parity gap (reports 0) |
+| **Per-process network stats** (TCP + UDP via ETW) | ✅ verified |
 | OOM detection | ❌ parity gap (reports false) |
 
 Validated end-to-end on **Windows Server 2025** against a stock Panel:
@@ -266,8 +266,6 @@ No reconfigure needed — `config.yml` persists.
 
 ## Known limitations
 
-- **Per-process network stats** report `0` (no clean per-process Windows source) —
-  the Panel network graph stays flat.
 - **OOM detection** reports `false` (the Job Object memory cap fails allocations
   rather than emitting a kernel OOM signal).
 - **POSIX chmod/chown** are no-ops on Windows (NTFS ACLs replace them).
