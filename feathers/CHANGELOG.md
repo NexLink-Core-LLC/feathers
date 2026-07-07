@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+### Security
+Backported all security fixes from upstream Wings v1.12.3 through v1.13.1:
+* [CVE-2026-52855](https://github.com/pterodactyl/wings/security/advisories/GHSA-pfvc-3p5h-x7h6) (Critical) — Egg configuration-file templating could expose node secrets (daemon token, registry credentials) via `{{config.*}}` placeholders in user-controlled egg variables. Template resolution is now restricted to the Docker network interface only, and only scalar values are substituted. *(Already present in this fork's base; verified.)*
+* [CVE-2026-52856](https://github.com/pterodactyl/wings/security/advisories/GHSA-ghrq-5wpp-hxx5) (High) — A crafted packet during the SFTP connection handshake with a payload shorter than 4 bytes caused an out-of-bounds slice panic, crashing the daemon. Unauthenticated, network-reachable.
+* [CVE-2026-52857](https://github.com/pterodactyl/wings/security/advisories/GHSA-q6hh-gp44-4hcm) (Moderate) — Config file parsers had no size limits, allowing an oversized server-owned config file to OOM the daemon. Parsing is now capped at 64 MB (file size, per-reader limits, and line-scanner buffer), and the `file` parser no longer creates files that do not exist yet.
+* Upstream v1.13.1 hardening batch (advisories pending publication):
+  * Backup identifiers are validated as canonical UUIDs before being joined into filesystem paths (blocks path traversal via backup UUID in create/restore/delete endpoints).
+  * SSRF protections for S3 backup restore downloads: URL scheme/host validation, DNS-rebinding-safe dialing that blocks private/internal/link-local ranges, redirect re-validation, response status check, and proper Content-Type parsing. New `system.backups.restore_host_allowlist` config option for intentionally internal endpoints.
+  * Docker registry credentials are matched by parsed registry identity (domain + repository path) instead of naive string prefix, preventing credentials from being sent to a look-alike registry.
+  * SFTP sessions are cancelled and writes denied while a server is installing, transferring, or restoring; SFTP writes now go through a quota-enforcing file wrapper so uploads can no longer bypass the disk limit.
+  * Integer-overflow hardening in disk quota accounting (`ufs.Quota.Add`/`CanFit`, archive size checks, decompression space checks).
+  * `Chtimesat` no longer follows symlinks (`AT_SYMLINK_NOFOLLOW` on Unix; symlinks are a timestamp no-op on Windows), preventing timestamp modification of files outside the server root.
+
 ## v1.12.2
 ### Fixed
 * Fixes a bug where `fs.Chmod` would change the symlink target possibly allowing a malicious user to modify files outside their home directory.
