@@ -2,6 +2,7 @@ package environment
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 
 	"github.com/docker/go-connections/nat"
@@ -28,6 +29,50 @@ type Allocations struct {
 	// Mappings contains all the ports that should be assigned to a given server
 	// attached to the IP they correspond to.
 	Mappings map[string][]int `json:"mappings"`
+}
+
+// ExtraPortVars exposes every ADDITIONAL allocation the Panel has dedicated to
+// this server as SERVER_IP_<n>/SERVER_PORT_<n> environment variables, so egg
+// startup templates can bind multi-port games (queue, RCON, ...) directly to
+// Panel allocations instead of hand-typed port variables that drift.
+//
+// The default allocation is excluded (it is already SERVER_IP/SERVER_PORT).
+// Ordering is deterministic: allocations are sorted by IP, then port,
+// ascending, and numbered from 1 — so with a default of 7777 and extras
+// 7778/7779, SERVER_PORT_1=7778 and SERVER_PORT_2=7779. Eggs document which
+// slot means what (e.g. "allocate queue as game+1, RCON as game+2").
+func (a *Allocations) ExtraPortVars() []string {
+	type mapping struct {
+		ip   string
+		port int
+	}
+	var extra []mapping
+	for ip, ports := range a.Mappings {
+		for _, port := range ports {
+			if port < 1 || port > 65535 {
+				continue
+			}
+			if ip == a.DefaultMapping.Ip && port == a.DefaultMapping.Port {
+				continue
+			}
+			extra = append(extra, mapping{ip: ip, port: port})
+		}
+	}
+	sort.Slice(extra, func(i, j int) bool {
+		if extra[i].ip != extra[j].ip {
+			return extra[i].ip < extra[j].ip
+		}
+		return extra[i].port < extra[j].port
+	})
+
+	out := make([]string, 0, len(extra)*2)
+	for i, m := range extra {
+		out = append(out,
+			fmt.Sprintf("SERVER_IP_%d=%s", i+1, m.ip),
+			fmt.Sprintf("SERVER_PORT_%d=%d", i+1, m.port),
+		)
+	}
+	return out
 }
 
 // Converts the server allocation mappings into a format that can be understood by Docker. While
