@@ -156,6 +156,9 @@ Windows eggs live in [`docs/test-eggs/`](docs/test-eggs/). In the Panel:
 > `windows…` image and a **PowerShell** install script + **Windows-runnable**
 > startup command. Existing community (Linux) eggs will **not** work on a Windows
 > node.
+>
+> 📄 **See [`docs/AUTHORING_WINDOWS_EGGS.md`](docs/AUTHORING_WINDOWS_EGGS.md)** for
+> the full guide on how Windows eggs differ from normal Ptero eggs and how to port one.
 
 ---
 
@@ -257,7 +260,7 @@ No reconfigure needed — `config.yml` persists.
 | **SteamCMD install "completes" but downloads nothing** (only its own ~43 MB self-update) | A fresh SteamCMD exits after self-updating without running `+app_update`. Run it **twice** — once `+quit`, then the `+app_update`. (Baked into the Isle eggs.) |
 | **SteamCMD creates a `%SystemDrive%` folder / installs to the wrong place** | The child process lacked the base Windows environment, or SteamCMD lived inside `force_install_dir`. Fixed in the daemon (child env now merges `os.Environ()`); keep SteamCMD **outside** the server dir (eggs put it in `%TEMP%`). |
 | **Unreal server "runs" but ~8 MB / no console / stuck Starting** | The root `*.exe` is a thin launcher; run the real `…\Binaries\Win64\…-Win64-Shipping.exe` directly, and add **`-stdout`** so UE logs to the console. (Baked into the Isle eggs.) |
-| **Game server runs but players can't connect on the allocation port** | Some games (Unreal/The Isle) bind the port from their own `Game.ini`, ignoring `?Port`. Set the port in the game's config to match the Panel allocation. |
+| **Game server runs but players can't connect on the allocation port** | Some games (Unreal/The Isle) ignore a bare `?Port` arg. Bind the port on the map URL (`<Map>?listen?Port=…`) and inject other ports with `-ini:Game:<section>:<Key>=<value>` overrides — the Evrima egg does this out of the box. |
 
 ---
 
@@ -271,9 +274,15 @@ No reconfigure needed — `config.yml` persists.
 - **Config-file writes** (the parser, e.g. `server.properties`) run as the daemon,
   not impersonated — cosmetic (owner = Administrators; the account still has access
   via the inherited ACL).
-- **Unreal-engine game ports** (e.g. The Isle) come from the game's own config
-  (`Game.ini`), not the `?Port` launch arg — so the egg/Game.ini must map the
-  Panel allocation port (templating this into the eggs is a TODO).
+- **Unreal-engine game ports** (e.g. The Isle) are not taken from a bare `?Port`
+  launch arg. All ports are defined by the **server's Panel allocations**: the
+  daemon exposes every additional allocation as `SERVER_IP_<n>`/`SERVER_PORT_<n>`
+  (sorted by IP then port, numbered from 1), and the Evrima egg binds game/query
+  to the default allocation (map-URL `?Port=…` + `-QueryPort=…`), queue to
+  `SERVER_PORT_1`, and RCON to `SERVER_PORT_2` via UE `-ini:Game:` command-line
+  overrides — no `Game.ini` hand-editing, no port numbers typed into variables.
+  Give the server 3 allocations (convention: queue = game+1, RCON = game+2).
+  (The Legacy egg still needs the same treatment.)
 - **Cross-platform transfers** (Win↔Linux) are out of scope; same-platform only.
 - **Per-server account logon** uses the built-in *Users* group (interactive logon
   right). Tighter least-privilege via LSA batch-logon-right is a hardening TODO.
@@ -292,5 +301,6 @@ feathers/                     daemon source (forked Wings 1.12.3)
   scripts/build-windows.ps1   cross-build feathers.exe
   scripts/install-windows.ps1 node installer (service + dirs + firewall + configure)
 docs/phase0-conformance-spec.md   the Wings contract this daemon targets
+docs/AUTHORING_WINDOWS_EGGS.md    how Windows eggs differ from normal Ptero eggs
 docs/test-eggs/                   importable Windows eggs
 ```
