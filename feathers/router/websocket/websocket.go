@@ -73,7 +73,11 @@ func NewTokenPayload(token []byte) (*tokens.WebsocketPayload, error) {
 		return nil, ErrJwtOnDenylist
 	}
 
-	if !payload.HasPermission(PermissionConnect) || !payload.HasScope(tokens.Websocket) {
+	// Panel versions < 1.12.3 do not set a "scope" claim on websocket tokens, so
+	// only enforce the websocket scope when one is actually present. This keeps
+	// feathers compatible with older panels (which gate access via permissions
+	// alone) while still honouring the scope on newer panels that send it.
+	if !payload.HasPermission(PermissionConnect) || (payload.Scope != "" && !payload.HasScope(tokens.Websocket)) {
 		return nil, ErrJwtNoConnectPerm
 	}
 
@@ -212,7 +216,10 @@ func (h *Handler) TokenValid() error {
 		return ErrJwtOnDenylist
 	}
 
-	if !j.HasPermission(PermissionConnect) || !j.HasScope(tokens.Websocket) {
+	// Panel < 1.12.3 omits the websocket "scope" claim; only enforce it when set
+	// (matches NewTokenPayload). Without this, auth succeeds but every subsequent
+	// message re-validates here and fails with "missing connect permission".
+	if !j.HasPermission(PermissionConnect) || (j.Scope != "" && !j.HasScope(tokens.Websocket)) {
 		return ErrJwtNoConnectPerm
 	}
 
