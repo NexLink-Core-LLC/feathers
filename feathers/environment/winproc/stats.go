@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pterodactyl/wings/environment"
+	"golang.org/x/sys/windows"
 )
 
 // resourcePollInterval is how often resource usage is sampled and published.
@@ -24,10 +25,16 @@ const resourcePollInterval = 2 * time.Second
 // multi-process servers like Unreal titles report their true usage), falling
 // back to the main process if the job's process list can't be read. CPU is
 // computed from the Job Object's cumulative user+kernel time deltas. Network
-// counters are a known Windows parity gap (§8.1) and report 0.
+// rx/tx are summed across the server's whole process tree from an ETW monitor on
+// the Microsoft-Windows-Kernel-Network provider (TCP + UDP); if ETW is
+// unavailable the monitor degrades to reporting 0 without ever failing the poll.
 func (e *Environment) pollResources(ctx context.Context) error {
 	ticker := time.NewTicker(resourcePollInterval)
 	defer ticker.Stop()
+
+	// Lazily start the ETW network monitor. Idempotent and non-fatal: any
+	// failure is logged once inside and leaves network reporting 0.
+	monitor.ensureStarted()
 
 	memLimit := uint64(e.Configuration.Limits().MemoryLimit) * 1024 * 1024
 
@@ -82,6 +89,27 @@ func (e *Environment) pollResources(ctx context.Context) error {
 				}
 			}
 
+			// Enumerate the server's whole process tree from the job so network
+			// is summed across the main process and any children it spawned. Fall
+			// back to just the main process's PID if enumeration fails.
+			var pids []uint32
+			if job != 0 {
+				if list, err := jobProcessIDs(job); err == nil {
+					pids = list
+				}
+			}
+			if len(pids) == 0 && proc != 0 {
+				if mainPID, err := windows.GetProcessId(proc); err == nil && mainPID != 0 {
+					pids = []uint32{mainPID}
+				}
+			}
+
+			var rx, tx uint64
+			if len(pids) > 0 {
+				monitor.registerPIDs(pids)
+				rx, tx = monitor.networkBytesFor(pids)
+			}
+
 			uptime, _ := e.Uptime(ctx)
 
 			e.Events().Publish(environment.ResourceEvent, environment.Stats{
@@ -89,7 +117,7 @@ func (e *Environment) pollResources(ctx context.Context) error {
 				Memory:      mem,
 				MemoryLimit: memLimit,
 				CpuAbsolute: cpuAbs,
-				Network:     environment.NetworkStats{},
+				Network:     environment.NetworkStats{RxBytes: rx, TxBytes: tx},
 			})
 		}
 	}
