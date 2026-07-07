@@ -145,20 +145,36 @@ func applyJobLimits(job windows.Handle, limits jobLimits) error {
 		return err
 	}
 
-	// CPU rate control lives in a separate info class. Setting ControlFlags to 0
-	// disables any previously applied cap (e.g. when a limit is removed).
-	cpu := jobCPURateControlInformation{}
+	// CPU rate control lives in a separate info class. Only issue the call when a
+	// cap is actually requested: Windows rejects a zero-flags/zero-rate "disable"
+	// call with ERROR_INVALID_PARAMETER on a job that has no existing cap, and
+	// every Start() runs on a freshly created (uncapped) job via OnBeforeStart —
+	// so a server with unlimited CPU (CpuLimit=0) would otherwise fail to boot.
 	if limits.cpuRate > 0 {
-		cpu.ControlFlags = jobObjectCPURateControlEnable | jobObjectCPURateControlHardCap
-		cpu.CPURate = limits.cpuRate
-	}
-	if _, err := windows.SetInformationJobObject(
-		job,
-		windows.JobObjectCpuRateControlInformation,
-		uintptr(unsafe.Pointer(&cpu)),
-		uint32(unsafe.Sizeof(cpu)),
-	); err != nil {
-		return err
+		cpu := jobCPURateControlInformation{
+			ControlFlags: jobObjectCPURateControlEnable | jobObjectCPURateControlHardCap,
+			CPURate:      limits.cpuRate,
+		}
+		if _, err := windows.SetInformationJobObject(
+			job,
+			windows.JobObjectCpuRateControlInformation,
+			uintptr(unsafe.Pointer(&cpu)),
+			uint32(unsafe.Sizeof(cpu)),
+		); err != nil {
+			return err
+		}
+	} else {
+		// No cap requested. Best-effort clear of any previously applied cap —
+		// relevant only when InSituUpdate lowers a live, already-capped job to
+		// unlimited. On a fresh/uncapped job this returns ERROR_INVALID_PARAMETER,
+		// which is expected and ignored.
+		cpu := jobCPURateControlInformation{}
+		_, _ = windows.SetInformationJobObject(
+			job,
+			windows.JobObjectCpuRateControlInformation,
+			uintptr(unsafe.Pointer(&cpu)),
+			uint32(unsafe.Sizeof(cpu)),
+		)
 	}
 	return nil
 }
