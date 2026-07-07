@@ -113,12 +113,22 @@ func (s *Server) IsInstalling() bool {
 	return s.installing.Load()
 }
 
+func (s *Server) SetInstalling(state bool) {
+	s.installing.Store(state)
+	if state {
+		s.Sftp().CancelAll()
+	}
+}
+
 func (s *Server) IsTransferring() bool {
 	return s.transferring.Load()
 }
 
 func (s *Server) SetTransferring(state bool) {
 	s.transferring.Store(state)
+	if state {
+		s.Sftp().CancelAll()
+	}
 }
 
 func (s *Server) IsRestoring() bool {
@@ -127,6 +137,13 @@ func (s *Server) IsRestoring() bool {
 
 func (s *Server) SetRestoring(state bool) {
 	s.restoring.Store(state)
+	if state {
+		s.Sftp().CancelAll()
+	}
+}
+
+func (s *Server) IsInProtectedState() bool {
+	return s.IsInstalling() || s.IsTransferring() || s.IsRestoring()
 }
 
 // SyncInstallState makes an HTTP request to the Panel instance notifying it that

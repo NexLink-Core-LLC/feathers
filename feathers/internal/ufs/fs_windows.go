@@ -311,7 +311,7 @@ func (fs *UnixFS) Chtimes(name string, atime, mtime time.Time) error {
 	if err != nil {
 		return err
 	}
-	return ensurePathError(fs.do(func() error { return os.Chtimes(abs, atime, mtime) }), "chtimes", name)
+	return ensurePathError(fs.do(func() error { return chtimesNoFollow(abs, atime, mtime) }), "chtimes", name)
 }
 
 func (fs *UnixFS) Chtimesat(dirfd int, name string, atime, mtime time.Time) error {
@@ -319,7 +319,22 @@ func (fs *UnixFS) Chtimesat(dirfd int, name string, atime, mtime time.Time) erro
 	if err != nil {
 		return err
 	}
-	return ensurePathError(fs.do(func() error { return os.Chtimes(abs, atime, mtime) }), "chtimes", name)
+	return ensurePathError(fs.do(func() error { return chtimesNoFollow(abs, atime, mtime) }), "chtimes", name)
+}
+
+// chtimesNoFollow mirrors the upstream AT_SYMLINK_NOFOLLOW behavior: os.Chtimes
+// follows symlinks/reparse points, which would let a link inside the sandbox
+// modify timestamps of a file outside it. Setting times on the link itself is
+// not supported by the os package, so links are treated as a no-op.
+func chtimesNoFollow(abs string, atime, mtime time.Time) error {
+	fi, err := os.Lstat(abs)
+	if err != nil {
+		return err
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return nil
+	}
+	return os.Chtimes(abs, atime, mtime)
 }
 
 // --- open / create ----------------------------------------------------------

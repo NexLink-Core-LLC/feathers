@@ -78,6 +78,7 @@ func (ip *InstallationProcess) Run() error {
 	if !ip.Server.installing.SwapIf(true) {
 		return errors.New("install: cannot obtain installation lock")
 	}
+	ip.Server.Sftp().CancelAll()
 	defer func() {
 		ip.Server.Log().Debug("releasing installation process lock")
 		ip.Server.installing.Store(false)
