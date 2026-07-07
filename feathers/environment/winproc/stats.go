@@ -20,9 +20,11 @@ const resourcePollInterval = 2 * time.Second
 // provided context is canceled (by wait() when the process exits) or the server
 // enters the offline state.
 //
-// Memory is the main process's working set (child-process summing is a Phase-2
-// limitation). CPU is computed from the Job Object's cumulative user+kernel time
-// deltas. Network counters are a known Windows parity gap (§8.1) and report 0.
+// Memory is the working set summed across every process in the Job Object (so
+// multi-process servers like Unreal titles report their true usage), falling
+// back to the main process if the job's process list can't be read. CPU is
+// computed from the Job Object's cumulative user+kernel time deltas. Network
+// counters are a known Windows parity gap (§8.1) and report 0.
 func (e *Environment) pollResources(ctx context.Context) error {
 	ticker := time.NewTicker(resourcePollInterval)
 	defer ticker.Stop()
@@ -48,8 +50,15 @@ func (e *Environment) pollResources(ctx context.Context) error {
 			proc := e.procHandle
 			e.mu.RUnlock()
 
+			// Sum the working set across the whole job so multi-process servers
+			// (e.g. an Unreal launcher that spawns a child *-Shipping.exe) report
+			// their true memory. Fall back to the main process if the job's
+			// process list can't be read.
 			var mem uint64
-			if proc != 0 {
+			if job != 0 {
+				mem = jobWorkingSet(job)
+			}
+			if mem == 0 && proc != 0 {
 				mem = processWorkingSet(proc)
 			}
 

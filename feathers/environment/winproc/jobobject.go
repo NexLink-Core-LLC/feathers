@@ -178,9 +178,8 @@ func queryJobAccounting(job windows.Handle) (jobBasicAccountingInformation, erro
 }
 
 // processWorkingSet returns the resident memory (working set) of a single
-// process in bytes, or 0 if it cannot be read. NOTE: this reports the main
-// process only and does not yet sum child processes in the job — a known Phase
-// 2 limitation, sufficient for the single-process game servers targeted first.
+// process in bytes, or 0 if it cannot be read. This reports one process only;
+// jobWorkingSet sums it across an entire job for multi-process servers.
 func processWorkingSet(h windows.Handle) uint64 {
 	var pmc processMemoryCounters
 	pmc.CB = uint32(unsafe.Sizeof(pmc))
@@ -189,6 +188,69 @@ func processWorkingSet(h windows.Handle) uint64 {
 		return 0
 	}
 	return uint64(pmc.WorkingSetSize)
+}
+
+// jobProcessIDs returns the PIDs of every process currently assigned to the
+// job. JOBOBJECT_BASIC_PROCESS_ID_LIST is a variable-length structure (a
+// two-DWORD header followed by an inline ULONG_PTR array), so the buffer is
+// grown and the query retried until the full list fits.
+func jobProcessIDs(job windows.Handle) ([]uint32, error) {
+	const headerBytes = 8 // NumberOfAssignedProcesses + NumberOfProcessIdsInList; the ULONG_PTR array is already 8-aligned at offset 8
+	ptrSize := int(unsafe.Sizeof(uintptr(0)))
+
+	capacity := 64
+	for {
+		buf := make([]byte, headerBytes+capacity*ptrSize)
+		err := windows.QueryInformationJobObject(
+			job,
+			windows.JobObjectBasicProcessIdList,
+			uintptr(unsafe.Pointer(&buf[0])),
+			uint32(len(buf)),
+			nil,
+		)
+		if err != nil {
+			// The buffer was too small to hold every PID; double it and retry.
+			if err == windows.ERROR_MORE_DATA {
+				capacity *= 2
+				continue
+			}
+			return nil, err
+		}
+		count := *(*uint32)(unsafe.Pointer(&buf[4])) // NumberOfProcessIdsInList
+		ids := make([]uint32, 0, count)
+		for i := 0; i < int(count); i++ {
+			pid := *(*uintptr)(unsafe.Pointer(&buf[headerBytes+i*ptrSize]))
+			ids = append(ids, uint32(pid))
+		}
+		return ids, nil
+	}
+}
+
+// jobWorkingSet sums the resident memory (working set) of every process in the
+// job, giving an accurate figure for multi-process game servers — e.g. Unreal
+// titles like The Isle, whose thin launcher spawns the real work in a child
+// *-Win64-Shipping.exe. It returns 0 if the job's process list cannot be read,
+// so callers can fall back to the main-process figure.
+func jobWorkingSet(job windows.Handle) uint64 {
+	pids, err := jobProcessIDs(job)
+	if err != nil {
+		return 0
+	}
+	var total uint64
+	for _, pid := range pids {
+		if pid == 0 {
+			continue
+		}
+		// LocalSystem (the daemon) can open any process; QUERY_INFORMATION +
+		// VM_READ are what GetProcessMemoryInfo requires.
+		h, err := windows.OpenProcess(windows.PROCESS_QUERY_INFORMATION|windows.PROCESS_VM_READ, false, pid)
+		if err != nil {
+			continue
+		}
+		total += processWorkingSet(h)
+		_ = windows.CloseHandle(h)
+	}
+	return total
 }
 
 // processExitCode returns the exit code of the process referenced by h and
