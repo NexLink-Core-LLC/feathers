@@ -66,6 +66,16 @@ func (fs *Filesystem) HasSpaceAvailable(allowStaleValue bool) bool {
 		log.WithField("root", fs.Path()).WithField("error", err).Warn("failed to determine root fs directory size")
 	}
 
+	// Physical safety valve (Windows only; no-op elsewhere): regardless of the
+	// per-server limit — including "unlimited" servers, which are exactly the
+	// ones that can fill a disk — never allow writes when the underlying volume
+	// is critically low on free space. This is what stops one runaway server
+	// from taking the whole node down. Checked BEFORE the unlimited early-return.
+	if !volumeHasHeadroom(fs.Path()) {
+		log.WithField("root", fs.Path()).Warn("filesystem: underlying volume critically low on free space; denying writes")
+		return false
+	}
+
 	// If space is -1 or 0 just return true, means they're allowed unlimited.
 	//
 	// Technically we could skip disk space calculation because we don't need to check if the
