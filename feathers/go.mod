@@ -6,6 +6,7 @@ toolchain go1.24.1
 
 require (
 	emperror.dev/errors v0.8.1
+	github.com/0xrawsec/golang-etw v1.6.2
 	github.com/AlecAivazis/survey/v2 v2.3.7
 	github.com/Jeffail/gabs/v2 v2.7.0
 	github.com/NYTimes/logrotate v1.0.0
@@ -54,6 +55,7 @@ require (
 )
 
 require (
+	github.com/0xrawsec/golang-utils v1.3.1 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/Microsoft/hcsshim v0.12.9 // indirect
 	github.com/STARRY-S/zip v0.2.3 // indirect
