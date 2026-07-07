@@ -158,6 +158,11 @@ func (s *Server) GetEnvironmentVariables() []string {
 		fmt.Sprintf("SERVER_PORT=%d", s.Config().Allocations.DefaultMapping.Port),
 	}
 
+	// Expose every additional Panel allocation as SERVER_IP_<n>/SERVER_PORT_<n>
+	// so eggs can bind multi-port games (queue, RCON, ...) straight to
+	// allocations. See Allocations.ExtraPortVars for the ordering contract.
+	out = append(out, s.Config().Allocations.ExtraPortVars()...)
+
 eloop:
 	for k := range s.Config().EnvVars {
 		// Don't allow any environment variables that we have already set above.
