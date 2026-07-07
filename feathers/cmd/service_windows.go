@@ -6,6 +6,7 @@ import (
 	"fmt"
 	log2 "log"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/sys/windows/svc"
@@ -152,7 +153,25 @@ func installService(configPath string) error {
 	}
 	defer s.Close()
 
-	fmt.Printf("Service %q installed.\n  Executable: %s\n  Config:     %s\nStart it with: wings service start\n", serviceName, exePath, configPath)
+	// Configure SCM auto-recovery so an unclean daemon exit (panic, crash,
+	// OOM) restarts the service automatically instead of leaving the node dark.
+	// Because every game server runs in a Job Object with KILL_ON_JOB_CLOSE,
+	// the daemon dying takes all servers with it — so getting it back up fast,
+	// after which it cold-restarts the servers from persisted state, is the
+	// difference between a blip and a manual 3am intervention. Escalating
+	// delays (5s → 10s → 30s), failure count reset after 24h.
+	recovery := []mgr.RecoveryAction{
+		{Type: mgr.ServiceRestart, Delay: 5 * time.Second},
+		{Type: mgr.ServiceRestart, Delay: 10 * time.Second},
+		{Type: mgr.ServiceRestart, Delay: 30 * time.Second},
+	}
+	if err := s.SetRecoveryActions(recovery, 86400); err != nil {
+		// Non-fatal: the service is installed and usable, it just won't
+		// auto-restart on crash. Surface it loudly so it can be set manually.
+		fmt.Printf("WARNING: service installed but could not set auto-recovery actions: %v\n", err)
+	}
+
+	fmt.Printf("Service %q installed.\n  Executable: %s\n  Config:     %s\n  Recovery:   auto-restart on failure (5s/10s/30s)\nStart it with: wings service start\n", serviceName, exePath, configPath)
 	return nil
 }
 
