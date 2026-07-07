@@ -1,6 +1,29 @@
 # Changelog
 
-## Unreleased
+Feathers releases are tagged `v<upstream base>-feathers.<n>`: the first part is
+the upstream Wings version this fork has security/feature parity with, and the
+`feathers.<n>` suffix increments with each Feathers release on that base.
+Sections below the first Feathers entry are the upstream Wings history this
+fork was created from.
+
+## v1.13.1-feathers.1
+First tagged release of Feathers, the Windows port of Pterodactyl Wings
+(forked from Wings v1.12.2).
+
+### Feathers
+* Native Windows process management via Job Objects, including servers with
+  unlimited CPU, with memory usage reported as the sum of all processes in the
+  server's Job Object.
+* Additional server allocations are exposed to servers as `SERVER_PORT_<n>`
+  environment variables.
+* Embedded tzdata so a non-UTC node timezone does not crash boot.
+* Windows service auto-recovery actions are configured on service install.
+* Writes are denied when the underlying volume is critically low on free
+  space, protecting the node from runaway servers.
+* WebSocket compatibility with Panel versions before 1.12.3 whose tokens omit
+  the scope claim.
+* Documentation: guide to authoring Windows eggs.
+
 ### Security
 Backported all security fixes from upstream Wings v1.12.3 through v1.13.1:
 * [CVE-2026-52855](https://github.com/pterodactyl/wings/security/advisories/GHSA-pfvc-3p5h-x7h6) (Critical) — Egg configuration-file templating could expose node secrets (daemon token, registry credentials) via `{{config.*}}` placeholders in user-controlled egg variables. Template resolution is now restricted to the Docker network interface only, and only scalar values are substituted. *(Already present in this fork's base; verified.)*
